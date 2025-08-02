@@ -1,7 +1,8 @@
 build/
-!server/build/libs/server-1.6.0-SNAPSHOT-all.jar
+!server/build/libs/globallydynamic-server-*-standalone.jar
 .gradle/
 .idea/
 *.log
 storage/
 META-INF/
+test-*.sh
