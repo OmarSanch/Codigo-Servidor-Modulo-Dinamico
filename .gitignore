@@ -1,0 +1,7 @@
+build/
+!server/build/libs/server-1.6.0-SNAPSHOT-all.jar
+.gradle/
+.idea/
+*.log
+storage/
+META-INF/
