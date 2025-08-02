@@ -1,8 +1,8 @@
-FROM openjdk:11-jre-slim
+FROM openjdk:17-jre-slim
 
 WORKDIR /app
 
-# Copiar el JAR standalone (el que tiene Main-Class configurado)
+# Copiar el JAR standalone
 COPY server/build/libs/globallydynamic-server-1.6.0-SNAPSHOT-standalone.jar app.jar
 COPY start.sh start.sh
 
