@@ -1,0 +1,20 @@
+apply plugin: 'java'
+apply plugin: 'kotlin'
+
+test {
+    useJUnitPlatform()
+}
+
+dependencies {
+  testImplementation project(':server')
+  testImplementation deps.junit.api
+  testImplementation deps.junit.params
+  testImplementation deps.junit.engine
+  testImplementation deps.junit.runner
+  testImplementation deps.mockito.core
+  testImplementation deps.mockito.jupiter
+  testImplementation deps.mockito.kotlin
+  testImplementation deps.truth
+  testImplementation deps.httpcomponents.client
+  testImplementation deps.httpcomponents.mime
+}

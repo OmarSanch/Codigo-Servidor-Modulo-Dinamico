@@ -1,0 +1,87 @@
+apply plugin: 'kotlin'
+apply plugin: 'org.jetbrains.dokka'
+apply plugin: "com.github.gmazzo.buildconfig"
+apply plugin: 'idea'
+
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+
+task executableJar(type: ShadowJar) {
+    if (project.hasProperty("archiveName")) {
+        archiveName = "${project.property("archiveName")}"
+    } else {
+        archiveBaseName = 'globallydynamic-server'
+        archiveClassifier = 'standalone'
+    }
+    if (project.hasProperty("outputDir")) {
+        destinationDirectory = file(project.property("outputDir"))
+    }
+    from sourceSets.main.output
+    configurations = [project.configurations.runtimeClasspath]
+    manifest {
+        attributes 'Main-Class': 'com.jeppeman.globallydynamic.server.GloballyDynamicMainKt'
+    }
+
+    /*
+    If one dependency jar is signed when making a fat jar,
+    all unsigned classes will be ignored by the Java runtime.
+    This causes the "Could not find or load main class"-error;
+    hence we exclude all signatures from the fat jar
+     */
+    exclude 'META-INF/*.RSA'
+    exclude 'META-INF/*.SF'
+    exclude 'META-INF/*.DSA'
+}
+
+task runExecutableJar(type: JavaExec) {
+    dependsOn executableJar
+    classpath = files("$buildDir/libs/globallydynamic-server-$VERSION_NAME-standalone.jar")
+    mainClass = "com.jeppeman.globallydynamic.server.GloballyDynamicMainKt"
+}
+
+test {
+    useJUnitPlatform()
+}
+
+configurations {
+    jarLibs
+}
+
+buildConfig {
+    buildConfigField 'String', 'VERSION', "\"${VERSION_NAME}\""
+}
+
+dokka {
+    outputDirectory = "$buildDir/dokka"
+    configuration {
+        includeNonPublic = false
+    }
+}
+
+dependencies {
+    implementation deps.jetty.server
+    implementation deps.gcp.storage
+    implementation deps.aws.s3
+    implementation deps.bundletool
+    jarLibs deps.bundletool
+
+   /* compileOnly deps.bundletool_maven
+    compileOnly deps.guava*/
+
+    testImplementation deps.junit.api
+    testImplementation deps.junit.params
+    testImplementation deps.junit.engine
+    testImplementation deps.junit.runner
+    testImplementation deps.mockito.core
+    testImplementation deps.mockito.jupiter
+    testImplementation deps.mockito.kotlin
+    testImplementation deps.truth
+}
+
+jar {
+    archiveFileName = 'globallydynamic-server.jar'
+    from {
+        configurations.jarLibs.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}
+
+apply from: rootProject.file('gradle/gradle-mvn-push.gradle')
