@@ -86,7 +86,7 @@ internal interface BundleManager {
 
 internal class BundleManagerImpl(
     private val gson: Gson,
-    private val storageBackend: StorageBackend,
+    internal val storageBackend: StorageBackend,
     private val logger: Logger,
     private val overrideExistingBundles: Boolean
 ) : BundleManager {
