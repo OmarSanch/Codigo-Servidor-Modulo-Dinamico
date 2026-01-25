@@ -29,7 +29,7 @@ interface StorageBackend {
 }
 
 class LocalStorageBackend private constructor(
-    internal val baseStoragePath: Path
+    private val baseStoragePath: Path
 ) : StorageBackend {
 
     override fun storeFile(name: String, contentType: String, inputStream: InputStream) {
@@ -215,6 +215,3 @@ class S3Backend(
         fun builder(): Builder = Builder()
     }
 }
-
-typealias GCPStorageBackend = GoogleCloudStorageBackend
-typealias S3StorageBackend = S3Backend

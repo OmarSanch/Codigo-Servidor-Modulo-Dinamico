@@ -178,11 +178,6 @@ internal class GloballyDynamicServerImpl(
                 bundleManager = bundleManager,
                 logger = configuration.logger
             ),
-            VersionPathHandler(
-                storageBackend = configuration.storageBackend,
-                logger = configuration.logger,
-                gson = gson
-            ),
             LivenessPathHandler()
         ) + configuration.pathHandlers
     }
