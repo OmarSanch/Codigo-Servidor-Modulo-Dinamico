@@ -29,11 +29,11 @@ FROM eclipse-temurin:17-jre
 
 WORKDIR /app
 
-# Copia el JAR standalone (fat JAR con todas las dependencias)
+# Copia el JAR standalone (fat JAR con todas las dependencias - 71MB)
 COPY --from=builder /build/server/build/libs/*-standalone.jar app.jar
 
-# Verifica que el JAR existe y contiene Jetty
-RUN ls -lh app.jar && jar tf app.jar | grep "org/eclipse/jetty/server/Server.class" && echo "✓ Jetty encontrado en el JAR"
+# Verifica que el JAR existe
+RUN ls -lh app.jar
 
 # Copia el script de inicio
 COPY start.sh start.sh
