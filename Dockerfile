@@ -3,7 +3,7 @@ FROM eclipse-temurin:17-jdk AS builder
 
 WORKDIR /build
 
-# Copia TODOS los archivos de configuración de Gradle
+# Copia archivos de configuración de Gradle
 COPY gradle gradle
 COPY gradlew .
 COPY gradlew.bat .
@@ -12,22 +12,28 @@ COPY build.gradle .
 COPY deps.gradle .
 COPY gradle.properties .
 
-# Copia el código fuente completo (incluye server/gradle.properties)
+# Copia el código fuente
 COPY server server
 
 # Da permisos de ejecución
 RUN chmod +x gradlew
 
-# Compila el proyecto (sin tests)
-RUN ./gradlew clean :server:build -x test --no-daemon
+# Compila usando la tarea executableJar que genera el fat JAR
+RUN ./gradlew clean :server:executableJar -x test --no-daemon
+
+# Muestra los JARs generados
+RUN echo "=== JARs generados ===" && ls -lah /build/server/build/libs/
 
 # Etapa 2: Runtime
 FROM eclipse-temurin:17-jre
 
 WORKDIR /app
 
-# Copia el JAR compilado (nombre correcto)
-COPY --from=builder /build/server/build/libs/globallydynamic-server.jar app.jar
+# Copia el JAR standalone (fat JAR con todas las dependencias)
+COPY --from=builder /build/server/build/libs/*-standalone.jar app.jar
+
+# Verifica que el JAR existe y contiene Jetty
+RUN ls -lh app.jar && jar tf app.jar | grep "org/eclipse/jetty/server/Server.class" && echo "✓ Jetty encontrado en el JAR"
 
 # Copia el script de inicio
 COPY start.sh start.sh
