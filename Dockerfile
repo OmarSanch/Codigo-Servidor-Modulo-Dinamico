@@ -2,35 +2,35 @@
 FROM eclipse-temurin:17-jdk AS build
 WORKDIR /app
 
-# Copiamos los archivos de configuración de Gradle
+# 1. Copiamos los archivos de Gradle Wrapper
 COPY gradlew .
 COPY gradle gradle
-COPY build.gradle .
-COPY settings.gradle .
 
-# Copiamos el código fuente de los módulos
+# 2. COPIA CRUCIAL: Todos los archivos de configuración .gradle de la raíz
+# Esto incluirá build.gradle, settings.gradle y el deps.gradle que falta
+COPY *.gradle ./
+
+# 3. Copiamos el código fuente del módulo server
+# (Si tienes otros módulos como 'core' o 'common', deberás agregarlos aquí también)
 COPY server server
 
-# Damos permisos y compilamos el JAR (usamos bootJar o jar dependiendo de tu config)
-# El flag -x test es para saltar los tests y que suba más rápido
+# 4. Compilamos
 RUN chmod +x gradlew
-RUN ./gradlew :server:assemble
+RUN ./gradlew :server:assemble -x test
 
 # --- ETAPA 2: Imagen de ejecución ---
 FROM eclipse-temurin:17-jre
 WORKDIR /app
 
 # Copiamos el JAR generado desde la etapa de compilación
-# Nota: Ajusta la ruta si el nombre del jar cambia, pero el asterisco (*) ayuda.
-COPY --from=build /app/server/build/libs/*-standalone.jar app.jar
+# Usamos el comodín para atrapar el archivo -standalone.jar
+COPY --from=build /app/server/build/libs/*standalone.jar app.jar
 COPY start.sh start.sh
 
-# Configuraciones adicionales que ya tenías
 RUN chmod +x start.sh
 RUN mkdir -p /app/storage
 
 EXPOSE 8080
 ENV PORT=8080
 
-# Usamos ENTRYPOINT para asegurar que el script reciba las señales de parada
 ENTRYPOINT ["./start.sh"]
