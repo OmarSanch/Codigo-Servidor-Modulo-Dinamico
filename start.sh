@@ -6,7 +6,7 @@ java -version
 
 # Ejecutar directamente con -jar y especificar la clase principal
 java -Dfile.encoding=UTF-8 \
-     -cp app.jar com.globallydynamic.server.GloballyDynamicServer \
+     -jar app.jar \
      --port "${PORT:-8080}" \
      --username "${GLOBALLY_DYNAMIC_USERNAME:-admin}" \
      --password "${GLOBALLY_DYNAMIC_PASSWORD:-secret123}" \

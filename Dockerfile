@@ -1,26 +1,22 @@
-# --- ETAPA 1: Compilación (Igual) ---
-FROM eclipse-temurin:17-jdk AS build
-WORKDIR /app
-COPY gradlew .
-COPY gradle gradle
-COPY *.gradle ./
-COPY *.properties ./
-COPY server server
-RUN chmod +x gradlew
-RUN ./gradlew :server:assemble -x test --no-daemon
-
-# --- ETAPA 2: Imagen de ejecución ---
 FROM eclipse-temurin:17-jre
+
 WORKDIR /app
 
-# Copiamos el archivo exacto que encontraste con 'ls'
-COPY --from=build /app/server/build/libs/server-*-all.jar app.jar
+# Copiar el JAR standalone
+COPY server/build/libs/globallydynamic-server-1.6.0-SNAPSHOT-standalone.jar app.jar
 COPY start.sh start.sh
 
+# Hacer el script ejecutable
 RUN chmod +x start.sh
+
+# Crear directorio de storage
 RUN mkdir -p /app/storage
 
+# Exponer puerto
 EXPOSE 8080
+
+# Variables de entorno por defecto
 ENV PORT=8080
 
-ENTRYPOINT ["./start.sh"]
+# Ejecutar el script
+CMD ["./start.sh"]
