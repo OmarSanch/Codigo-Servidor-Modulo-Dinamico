@@ -1,26 +1,16 @@
-FROM openjdk:11-jre-slim
+# Cambia openjdk:11-jre-slim por eclipse-temurin:17-jre
+FROM eclipse-temurin:17-jre
 
 WORKDIR /app
 
-# Copiar el JAR compilado
-COPY server/build/libs/globallydynamic-server.jar app.jar
+# El resto se mantiene igual a como lo tenías para que funcione
+COPY server/build/libs/globallydynamic-server-1.6.0-SNAPSHOT-standalone.jar app.jar
+COPY start.sh start.sh
 
-# Crear directorio de storage
+RUN chmod +x start.sh
 RUN mkdir -p /app/storage
 
-# Exponer puerto
 EXPOSE 8080
-
-# Variables de entorno por defecto
 ENV PORT=8080
 
-# Comando para ejecutar el servidor
-CMD ["java", "-jar", "app.jar", \
-     "--port", "${PORT}", \
-     "--username", "${GLOBALLY_DYNAMIC_USERNAME:-admin}", \
-     "--password", "${GLOBALLY_DYNAMIC_PASSWORD:-secret123}", \
-     "--storage-backend", "${GLOBALLY_DYNAMIC_STORAGE_BACKEND:-local}", \
-     "--local-storage-path", "${GLOBALLY_DYNAMIC_LOCAL_STORAGE_PATH:-/app/storage}", \
-     "--https-redirect", "${GLOBALLY_DYNAMIC_HTTPS_REDIRECT:-false}", \
-     "--override-existing-bundles", "${GLOBALLY_DYNAMIC_OVERRIDE_EXISTING:-true}", \
-     "--validate-signature-on-download", "${GLOBALLY_DYNAMIC_VALIDATE_SIGNATURE:-false}"
+CMD ["./start.sh"]
