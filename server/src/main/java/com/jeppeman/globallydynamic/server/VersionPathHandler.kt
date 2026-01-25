@@ -109,74 +109,43 @@ class VersionPathHandler(
             logger.i("  - ${file.name} (${if (file.isDirectory) "DIR" else "FILE"})")
         }
 
+        val versions = mutableSetOf<Int>()
+
+        // Método 1: Busca en estructura de directorios (para compatibilidad futura)
         val appPath = File(basePathFile, applicationId)
-        logger.i("App path: ${appPath.absolutePath}")
-
-        if (!appPath.exists()) {
-            logger.i("ADVERTENCIA: No existe directorio para applicationId='$applicationId'")
-            logger.i("Path completo buscado: ${appPath.absolutePath}")
-            return emptyList()
-        }
-
-        if (!appPath.isDirectory) {
-            logger.e("El path de la app existe pero NO es un directorio")
-            return emptyList()
-        }
-
-        logger.i("Directorio de la app encontrado. Contenido:")
-        val files = appPath.listFiles()
-        if (files == null || files.isEmpty()) {
-            logger.i("ADVERTENCIA: Directorio de app vacío o no se pudo leer")
-            return emptyList()
-        }
-
-        files.forEach { file ->
-            logger.i("  - ${file.name} (${if (file.isDirectory) "DIR" else "FILE"})")
-        }
-
-        val versions = mutableListOf<Int>()
-
-        for (versionDir in files) {
-            if (!versionDir.isDirectory) {
-                logger.i("Saltando '${versionDir.name}' - no es directorio")
-                continue
-            }
-
-            val versionNumber = versionDir.name.toIntOrNull()
-            if (versionNumber == null) {
-                logger.i("Saltando directorio '${versionDir.name}' - no es un número válido")
-                continue
-            }
-
-            logger.i("Revisando versión $versionNumber...")
-            val variantPath = File(versionDir, variant)
-
-            if (!variantPath.exists()) {
-                logger.i("  Variante '$variant' NO existe en versión $versionNumber")
-                continue
-            }
-
-            if (!variantPath.isDirectory) {
-                logger.i("  ADVERTENCIA: Path de variante existe pero NO es directorio")
-                continue
-            }
-
-            logger.i("  ✓ Versión $versionNumber tiene variante '$variant'")
-
-            // Verificar que tenga archivos
-            val variantFiles = variantPath.listFiles()
-            if (variantFiles != null && variantFiles.isNotEmpty()) {
-                logger.i("    Archivos encontrados: ${variantFiles.size}")
-                variantFiles.take(5).forEach { file ->
-                    logger.i("      - ${file.name}")
+        if (appPath.exists() && appPath.isDirectory) {
+            logger.i("Buscando en estructura de directorios: ${appPath.absolutePath}")
+            appPath.listFiles()?.forEach { versionDir ->
+                if (versionDir.isDirectory) {
+                    versionDir.name.toIntOrNull()?.let { versionNumber ->
+                        val variantPath = File(versionDir, variant)
+                        if (variantPath.exists() && variantPath.isDirectory) {
+                            logger.i("  ✓ Encontrada versión $versionNumber en directorio")
+                            versions.add(versionNumber)
+                        }
+                    }
                 }
-                versions.add(versionNumber)
-            } else {
-                logger.i("    ADVERTENCIA: Directorio de variante vacío")
             }
         }
 
-        logger.i("Total versiones válidas encontradas: ${versions.size}")
-        return versions
+        // Método 2: Busca archivos con patrón {applicationId}_{variant}_{version}.apks
+        // Este es el formato que usa BundleManager actualmente
+        logger.i("Buscando archivos con patrón de nombre...")
+        val pattern = "${applicationId}_${variant}_"
+        basePathFile.listFiles()?.forEach { file ->
+            if (file.isFile && file.name.startsWith(pattern) && file.name.endsWith(".apks")) {
+                val versionStr = file.name
+                    .removePrefix(pattern)
+                    .removeSuffix(".apks")
+
+                versionStr.toIntOrNull()?.let { versionNumber ->
+                    logger.i("  ✓ Encontrada versión $versionNumber en archivo ${file.name}")
+                    versions.add(versionNumber)
+                }
+            }
+        }
+
+        logger.i("Total versiones encontradas: ${versions.size} -> ${versions.sorted()}")
+        return versions.sorted()
     }
 }
