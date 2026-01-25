@@ -2,21 +2,22 @@
 FROM eclipse-temurin:17-jdk AS build
 WORKDIR /app
 
-# 1. Copiamos los archivos de Gradle Wrapper
+# 1. Copiamos el wrapper
 COPY gradlew .
 COPY gradle gradle
 
-# 2. COPIA CRUCIAL: Todos los archivos de configuración .gradle de la raíz
-# Esto incluirá build.gradle, settings.gradle y el deps.gradle que falta
+# 2. COPIA AMPLIADA: Copiamos todos los archivos de configuración
+# Esto incluye: build.gradle, settings.gradle, deps.gradle Y gradle.properties
 COPY *.gradle ./
+COPY *.properties ./
 
-# 3. Copiamos el código fuente del módulo server
-# (Si tienes otros módulos como 'core' o 'common', deberás agregarlos aquí también)
+# 3. Copiamos el código fuente
 COPY server server
 
 # 4. Compilamos
 RUN chmod +x gradlew
-RUN ./gradlew :server:assemble -x test
+# Añadimos un flag para ignorar propiedades de entorno si fuera necesario
+RUN ./gradlew :server:assemble -x test --no-daemon
 
 # --- ETAPA 2: Imagen de ejecución ---
 FROM eclipse-temurin:17-jre
