@@ -10,8 +10,9 @@ COPY gradlew.bat .
 COPY settings.gradle .
 COPY build.gradle .
 COPY deps.gradle .
+COPY gradle.properties .
 
-# Copia el código fuente completo
+# Copia el código fuente completo (incluye server/gradle.properties)
 COPY server server
 
 # Da permisos de ejecución
