@@ -183,6 +183,11 @@ internal class GloballyDynamicServerImpl(
                 logger = configuration.logger,
                 gson = gson
             ),
+            DebugPathHandler(
+                storageBackend = configuration.storageBackend,
+                logger = configuration.logger,
+                gson = gson
+            ),
             LivenessPathHandler()
         ) + configuration.pathHandlers
     }
