@@ -20,3 +20,4 @@ ENV PORT=8080
 
 # Ejecutar el script
 CMD ["./start.sh"]
+COPY globallydynamic-server-1.6.0-SNAPSHOT-standalone.jar app.jar
