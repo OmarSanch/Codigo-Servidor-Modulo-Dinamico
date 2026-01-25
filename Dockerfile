@@ -21,13 +21,16 @@ RUN chmod +x gradlew
 # Compila el proyecto (sin tests)
 RUN ./gradlew clean :server:build -x test --no-daemon
 
+# DEBUG: Lista los archivos generados para ver el nombre exacto del JAR
+RUN ls -la /build/server/build/libs/
+
 # Etapa 2: Runtime
 FROM eclipse-temurin:17-jre
 
 WORKDIR /app
 
-# Copia el JAR compilado desde la etapa anterior
-COPY --from=builder /build/server/build/libs/globallydynamic-server-1.6.0-SNAPSHOT-standalone.jar app.jar
+# Copia el JAR compilado (usa comodín para encontrar cualquier JAR standalone)
+COPY --from=builder /build/server/build/libs/*-standalone.jar app.jar
 
 # Copia el script de inicio
 COPY start.sh start.sh
