@@ -3,14 +3,15 @@ FROM eclipse-temurin:17-jdk AS builder
 
 WORKDIR /build
 
-# Copia los archivos de Gradle
+# Copia TODOS los archivos de configuración de Gradle
 COPY gradle gradle
 COPY gradlew .
 COPY gradlew.bat .
 COPY settings.gradle .
 COPY build.gradle .
+COPY deps.gradle .
 
-# Copia el código fuente
+# Copia el código fuente completo
 COPY server server
 
 # Da permisos de ejecución
