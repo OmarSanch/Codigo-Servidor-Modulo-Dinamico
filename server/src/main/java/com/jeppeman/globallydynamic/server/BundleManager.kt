@@ -203,6 +203,14 @@ internal class BundleManagerImpl(
         bundleInputStream: InputStream,
         keyStoreInputStream: InputStream
     ): BundleManager.Result {
+        logger.i("Limpiando versiones antiguas para $applicationId...")
+        for (v in 1..version) {
+            storageBackend.deleteFile(getFinalFileName(applicationId, v, variant, "apks"))
+            storageBackend.deleteFile(getFinalFileName(applicationId, v, variant, "aab"))
+            storageBackend.deleteFile(getFinalFileName(applicationId, v, variant, "json"))
+            storageBackend.deleteFile(getFinalFileName(applicationId, v, variant, "keystore"))
+        }
+        
         val bundleFileName = getFinalFileName(applicationId, version, variant, "aab")
 
         if (!overrideExistingBundles && storageBackend.exists(bundleFileName)) {
