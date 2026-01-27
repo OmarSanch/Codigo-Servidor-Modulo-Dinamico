@@ -202,14 +202,6 @@ internal class BundleManagerImpl(
         bundleInputStream: InputStream,
         keyStoreInputStream: InputStream
     ): BundleManager.Result {
-        logger.i("Limpiando versiones antiguas para $applicationId...")
-        for (v in 1..version) {
-            storageBackend.deleteFile(getFinalFileName(applicationId, v, variant, "apks"))
-            storageBackend.deleteFile(getFinalFileName(applicationId, v, variant, "aab"))
-            storageBackend.deleteFile(getFinalFileName(applicationId, v, variant, "json"))
-            storageBackend.deleteFile(getFinalFileName(applicationId, v, variant, "keystore"))
-        }
-
         val bundleFileName = getFinalFileName(applicationId, version, variant, "aab")
 
         if (!overrideExistingBundles && storageBackend.exists(bundleFileName)) {
@@ -222,6 +214,7 @@ internal class BundleManagerImpl(
         Files.copy(keyStoreInputStream, keyStoreTempFile, StandardCopyOption.REPLACE_EXISTING)
         val bundleTempFile = tempDir.resolve("temp.aab")
         Files.copy(bundleInputStream, bundleTempFile, StandardCopyOption.REPLACE_EXISTING)
+
         val signingConfigJson = gson.fromJson(signingConfig, JsonObject::class.java)
         val keystorePass = signingConfigJson.get("storePassword")?.asString
             ?: return BundleManager.Result.Error.KeystorePassMissing
@@ -244,14 +237,25 @@ internal class BundleManagerImpl(
                 exception.message ?: exception.stackTraceToString())
         }
 
+        // 1. Guardamos la nueva versión PRIMERO
         val apkSetFileName = getFinalFileName(applicationId, version, variant, "apks")
         storageBackend.storeFile(apkSetFileName, "application/zip", apkSetPath.toFile().inputStream())
-
         storageBackend.storeFile(bundleFileName, "application/zip", bundleTempFile.toFile().inputStream())
+
         val signingConfigFileName = getFinalFileName(applicationId, version, variant, "json")
         storageBackend.storeFile(signingConfigFileName, "application/json", signingConfig.byteInputStream())
+
         val keystoreFileName = getFinalFileName(applicationId, version, variant, "keystore")
         storageBackend.storeFile(keystoreFileName, "application/octet-stream", keyStoreTempFile.toFile().inputStream())
+
+        // 2. AHORA SÍ: Si todo salió bien, borramos las versiones viejas (v < version)
+        logger.i("Limpieza de seguridad: Borrando versiones anteriores a la v$version")
+        for (v in 1 until version) {
+            storageBackend.deleteFile(getFinalFileName(applicationId, v, variant, "apks"))
+            storageBackend.deleteFile(getFinalFileName(applicationId, v, variant, "aab"))
+            storageBackend.deleteFile(getFinalFileName(applicationId, v, variant, "json"))
+            storageBackend.deleteFile(getFinalFileName(applicationId, v, variant, "keystore"))
+        }
 
         bundleTempFile.deleteCompletely()
         keyStoreTempFile.deleteCompletely()
