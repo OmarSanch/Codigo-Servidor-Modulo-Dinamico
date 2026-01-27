@@ -25,7 +25,6 @@ import java.security.cert.Certificate
 import java.util.*
 import java.util.Locale
 
-
 internal interface BundleManager {
     fun generateCompressedSplits(
         applicationId: String,
@@ -210,7 +209,7 @@ internal class BundleManagerImpl(
             storageBackend.deleteFile(getFinalFileName(applicationId, v, variant, "json"))
             storageBackend.deleteFile(getFinalFileName(applicationId, v, variant, "keystore"))
         }
-        
+
         val bundleFileName = getFinalFileName(applicationId, version, variant, "aab")
 
         if (!overrideExistingBundles && storageBackend.exists(bundleFileName)) {
