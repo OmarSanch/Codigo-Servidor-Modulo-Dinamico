@@ -25,7 +25,6 @@ import java.security.cert.Certificate
 import java.util.*
 import java.util.Locale
 
-
 internal interface BundleManager {
     fun generateCompressedSplits(
         applicationId: String,
