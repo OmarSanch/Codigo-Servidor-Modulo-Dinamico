@@ -236,6 +236,16 @@ internal class BundleManagerImpl(
                 exception.message ?: exception.stackTraceToString())
         }
 
+        val buildId = "sha256:" + sha256OfFile(apkSetPath)
+
+        val metaJson = """
+        {
+          "buildId": "$buildId"
+        }
+        """.trimIndent()
+
+        val metaFileName = getFinalFileName(applicationId, version, variant, "meta.json")
+        storageBackend.storeFile(metaFileName, "application/json", metaJson.byteInputStream())
         val apkSetFileName = getFinalFileName(applicationId, version, variant, "apks")
         storageBackend.storeFile(apkSetFileName, "application/zip", apkSetPath.toFile().inputStream())
 
@@ -306,3 +316,17 @@ private fun getFingerPrintFromSignature(signatures: Array<Certificate>): String?
     }
     return hashKey
 }
+
+private fun sha256OfFile(path: Path): String {
+    val md = MessageDigest.getInstance("SHA-256")
+    path.toFile().inputStream().use { input ->
+        val buf = ByteArray(8 * 1024)
+        while (true) {
+            val read = input.read(buf)
+            if (read <= 0) break
+            md.update(buf, 0, read)
+        }
+    }
+    return md.digest().joinToString("") { "%02x".format(it) }
+}
+

@@ -6,6 +6,7 @@ import com.jeppeman.globallydynamic.server.dto.toDeviceSpec
 import com.jeppeman.globallydynamic.server.extensions.readString
 import org.eclipse.jetty.http.HttpStatus
 import org.eclipse.jetty.server.Request
+import org.jose4j.json.internal.json_simple.JSONObject
 import javax.servlet.MultipartConfigElement
 import javax.servlet.http.HttpServletRequest
 import javax.servlet.http.HttpServletResponse
@@ -48,34 +49,30 @@ internal class DownloadSplitsPathHandler(
     private val logger: Logger,
     private val gson: Gson
 ) : PathHandler {
+
     override val path: String = "download"
     override val authRequired: Boolean = false
 
     override fun handle(request: HttpServletRequest?, response: HttpServletResponse?) {
         val applicationIdParam = request.requireQueryParam("application-id")
-        val versionParam = request.requireQueryParam("version")
         val variantParam = request.requireQueryParam("variant")
         val signatureParam = request.requireQueryParam("signature")
+
+        // ✅ version ahora es opcional (si no viene, asumimos 0 => latest)
+        val versionParam = request.getQueryParam("version")
+
         val throttle = request.getQueryParam("throttle")
         val featuresToInstallParam = request.getQueryParam("features") ?: arrayOf()
         val languagesToInstallParam = request.getQueryParam("languages") ?: arrayOf()
         val includeMissingParam = request.getQueryParam("include-missing")
 
         val body = request?.inputStream?.use { it.readString() }
-
         logger.i("Request body: $body")
 
         val deviceSpec = try {
             gson.fromJson(body, DeviceSpecDto::class.java).toDeviceSpec()
         } catch (exception: Exception) {
             throw HttpException(HttpStatus.BAD_REQUEST_400, "Invalid body, expected device spec json")
-        }
-
-        val version = try {
-            versionParam.first().toInt()
-        } catch (exception: Exception) {
-            throw HttpException(HttpStatus.BAD_REQUEST_400, "Expected version to be an integer, " +
-                "got ${versionParam.joinToString(",")}")
         }
 
         if (featuresToInstallParam.isEmpty() && languagesToInstallParam.isEmpty()) {
@@ -86,9 +83,21 @@ internal class DownloadSplitsPathHandler(
         val variant = variantParam.first()
         val signature = signatureParam.first()
 
+        // ✅ requestedVersion: si no viene o viene mal, usamos 0 (latest)
+        val requestedVersion = versionParam?.firstOrNull()?.toIntOrNull() ?: 0
+
+        // ✅ resolvedVersion: si requestedVersion <= 0 => latest
+        val latestVersion = findLatestVersion(applicationId, variant)
+        val resolvedVersion = if (requestedVersion <= 0) latestVersion else requestedVersion
+
+        logger.i("Download request: appId=$applicationId variant=$variant requestedVersion=$requestedVersion resolvedVersion=$resolvedVersion")
+
+        if (resolvedVersion <= 0) {
+            throw HttpException(HttpStatus.BAD_REQUEST_400, "No versions available for $applicationId / $variant")
+        }
+
         if (validateSignature) {
-            // Validate app signature
-            when (val validationResult = bundleManager.validateSignature(signature, applicationId, version, variant)) {
+            when (val validationResult = bundleManager.validateSignature(signature, applicationId, resolvedVersion, variant)) {
                 is BundleManager.Result.Error ->
                     throw HttpException(HttpStatus.BAD_REQUEST_400, validationResult.message)
                 else -> Unit
@@ -98,12 +107,12 @@ internal class DownloadSplitsPathHandler(
         val includeMissing = includeMissingParam?.first()?.toBoolean() ?: false
 
         val compressedSplitsResult = bundleManager.generateCompressedSplits(
-            applicationId = applicationIdParam.first(),
-            version = version,
-            variant = variantParam.first(),
+            applicationId = applicationId,
+            version = resolvedVersion,
+            variant = variant,
             deviceSpec = deviceSpec,
-            features = featuresToInstallParam.flatMap { feature -> feature.split(",") }.toTypedArray(),
-            languages = languagesToInstallParam.flatMap { feature -> feature.split(",") }.toTypedArray(),
+            features = featuresToInstallParam.flatMap { it.split(",") }.toTypedArray(),
+            languages = languagesToInstallParam.flatMap { it.split(",") }.toTypedArray(),
             includeMissing = includeMissing
         )
 
@@ -116,51 +125,74 @@ internal class DownloadSplitsPathHandler(
         var byteOffset = 0
         val throttleBy = throttle?.firstOrNull()?.toLongOrNull() ?: 0
         val interval = (throttleBy / 30f).toLong()
-        val byteInterval = (fileSize / 30f).toInt()
+        val byteInterval = (fileSize / 30f).toInt().coerceAtLeast(1) // ✅ evita 0
+
         val featuresString = featuresToInstallParam.joinToString(",")
         val languagesString = languagesToInstallParam.joinToString(",")
+
         val buffer = ByteArray(byteInterval)
-        if (featuresToInstallParam.isNotEmpty()) {
-            logger.i("Sending splits from features [$featuresString]")
-        }
-        if (languagesToInstallParam.isNotEmpty()) {
-            logger.i("Sending splits from languages [$languagesString]")
-        }
+
+        if (featuresToInstallParam.isNotEmpty()) logger.i("Sending splits from features [$featuresString]")
+        if (languagesToInstallParam.isNotEmpty()) logger.i("Sending splits from languages [$languagesString]")
 
         logger.i("Total size of splits: $fileSize")
 
         response?.apply {
             contentType = "application/zip"
             setHeader("Content-Disposition", "attachment; filename=splits.zip")
+
+            // ✅ header de debug para saber qué versión sirvió realmente
+            setHeader("X-GloballyDynamic-Resolved-Version", resolvedVersion.toString())
+
             setContentLength(fileSize)
+
             compressedSplits.toFile().inputStream().use { inputStream ->
                 while (byteOffset < fileSize) {
                     val bytesLeftToWrite = fileSize - byteOffset
-                    val writeLength = if (byteOffset + byteInterval > fileSize) {
-                        bytesLeftToWrite
-                    } else {
-                        byteInterval
-                    }
+                    val writeLength = if (byteOffset + byteInterval > fileSize) bytesLeftToWrite else byteInterval
                     inputStream.read(buffer, 0, writeLength)
                     outputStream.write(buffer, 0, writeLength)
                     byteOffset += writeLength
+
                     val percentageSent = Math.round((byteOffset / fileSize.toFloat()) * 100)
                     logger.i("Sent $byteOffset / $fileSize ($percentageSent%)", false)
-                    if (interval > 0) {
-                        Thread.sleep(interval)
-                    }
+
+                    if (interval > 0) Thread.sleep(interval)
                 }
             }
         }
 
         val message = StringBuilder("Finished sending ")
-        if (featuresToInstallParam.isNotEmpty()) {
-            message.append(" features [$featuresString]")
-        }
+        if (featuresToInstallParam.isNotEmpty()) message.append(" features [$featuresString]")
         if (languagesToInstallParam.isNotEmpty()) {
-            message.append((if (featuresToInstallParam.isNotEmpty()) " and " else "") + "languages [$languagesString")
+            message.append((if (featuresToInstallParam.isNotEmpty()) " and " else "") + "languages [$languagesString]")
         }
         logger.i(message = message.toString(), prefix = "\n")
+    }
+
+    /**
+     * ✅ Devuelve la última versión disponible en storage (patrón: {applicationId}_{variant}_{version}.apks)
+     */
+    private fun findLatestVersion(applicationId: String, variant: String): Int {
+        return try {
+            val sb = (bundleManager as? BundleManagerImpl)?.storageBackend
+            if (sb is LocalStorageBackend) {
+                val base = sb.baseStoragePath.toFile()
+                val pattern = "${applicationId}_${variant}_"
+                val versions = base.listFiles()
+                    ?.asSequence()
+                    ?.filter { it.isFile && it.name.startsWith(pattern) && it.name.endsWith(".apks") }
+                    ?.mapNotNull { f ->
+                        f.name.removePrefix(pattern).removeSuffix(".apks").toIntOrNull()
+                    }
+                    ?.toList()
+                    ?: emptyList()
+
+                versions.maxOrNull() ?: 0
+            } else 0
+        } catch (_: Exception) {
+            0
+        }
     }
 }
 
