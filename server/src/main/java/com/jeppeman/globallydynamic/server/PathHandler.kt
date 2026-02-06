@@ -173,7 +173,7 @@ internal class DownloadSplitsPathHandler(
     /**
      * ✅ Devuelve la última versión disponible en storage (patrón: {applicationId}_{variant}_{version}.apks)
      */
-    private fun findLatestVersion(applicationId: String, variant: String): Int {
+    private fun findLatestVersion(applicationId: String, variant: String): Int  {
         return try {
             val sb = (bundleManager as? BundleManagerImpl)?.storageBackend
             if (sb is LocalStorageBackend) {
@@ -188,7 +188,7 @@ internal class DownloadSplitsPathHandler(
                     ?.toList()
                     ?: emptyList()
 
-                versions.maxOrNull() ?: 0
+                versions.max() ?: 0   // 👈 aquí está la clave
             } else 0
         } catch (_: Exception) {
             0
