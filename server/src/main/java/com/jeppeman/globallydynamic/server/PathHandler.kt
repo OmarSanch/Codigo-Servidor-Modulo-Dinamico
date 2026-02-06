@@ -72,6 +72,7 @@ internal class DownloadSplitsPathHandler(
         val deviceSpec = try {
             gson.fromJson(body, DeviceSpecDto::class.java).toDeviceSpec()
         } catch (e: Exception) {
+            logger.e("Invalid device spec json. Body=$body", e)
             throw HttpException(HttpStatus.BAD_REQUEST_400, "Invalid body, expected device spec json")
         }
 
