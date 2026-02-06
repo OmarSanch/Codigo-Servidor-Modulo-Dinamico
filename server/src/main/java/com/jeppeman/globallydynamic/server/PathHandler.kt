@@ -58,7 +58,7 @@ internal class DownloadSplitsPathHandler(
         val variantParam = request.requireQueryParam("variant")
         val signatureParam = request.requireQueryParam("signature")
 
-        // ✅ version ahora es opcional (si no viene, asumimos 0 => latest)
+        // version opcional
         val versionParam = request.getQueryParam("version")
 
         val throttle = request.getQueryParam("throttle")
@@ -71,7 +71,7 @@ internal class DownloadSplitsPathHandler(
 
         val deviceSpec = try {
             gson.fromJson(body, DeviceSpecDto::class.java).toDeviceSpec()
-        } catch (exception: Exception) {
+        } catch (e: Exception) {
             throw HttpException(HttpStatus.BAD_REQUEST_400, "Invalid body, expected device spec json")
         }
 
@@ -83,10 +83,8 @@ internal class DownloadSplitsPathHandler(
         val variant = variantParam.first()
         val signature = signatureParam.first()
 
-        // ✅ requestedVersion: si no viene o viene mal, usamos 0 (latest)
+        // 1) Resolver versión a servir
         val requestedVersion = versionParam?.firstOrNull()?.toIntOrNull() ?: 0
-
-        // ✅ resolvedVersion: si requestedVersion <= 0 => latest
         val latestVersion = findLatestVersion(applicationId, variant)
         val resolvedVersion = if (requestedVersion <= 0) latestVersion else requestedVersion
 
@@ -96,6 +94,12 @@ internal class DownloadSplitsPathHandler(
             throw HttpException(HttpStatus.BAD_REQUEST_400, "No versions available for $applicationId / $variant")
         }
 
+        // 2) buildId (del meta) para ESA versión resuelta
+        val clientBuildId = request.getQueryParam("buildId")?.firstOrNull()
+        val serverBuildId = getBuildIdFromMeta(applicationId, variant, resolvedVersion)
+        val buildIdMismatch = clientBuildId != null && serverBuildId != null && clientBuildId != serverBuildId
+
+        // 3) Validar firma contra la versión resuelta
         if (validateSignature) {
             when (val validationResult = bundleManager.validateSignature(signature, applicationId, resolvedVersion, variant)) {
                 is BundleManager.Result.Error ->
@@ -106,6 +110,7 @@ internal class DownloadSplitsPathHandler(
 
         val includeMissing = includeMissingParam?.first()?.toBoolean() ?: false
 
+        // 4) Generar splits con resolvedVersion
         val compressedSplitsResult = bundleManager.generateCompressedSplits(
             applicationId = applicationId,
             version = resolvedVersion,
@@ -125,25 +130,18 @@ internal class DownloadSplitsPathHandler(
         var byteOffset = 0
         val throttleBy = throttle?.firstOrNull()?.toLongOrNull() ?: 0
         val interval = (throttleBy / 30f).toLong()
-        val byteInterval = (fileSize / 30f).toInt().coerceAtLeast(1) // ✅ evita 0
-
-        val featuresString = featuresToInstallParam.joinToString(",")
-        val languagesString = languagesToInstallParam.joinToString(",")
+        val byteInterval = (fileSize / 30f).toInt().coerceAtLeast(1)
 
         val buffer = ByteArray(byteInterval)
 
-        if (featuresToInstallParam.isNotEmpty()) logger.i("Sending splits from features [$featuresString]")
-        if (languagesToInstallParam.isNotEmpty()) logger.i("Sending splits from languages [$languagesString]")
-
-        logger.i("Total size of splits: $fileSize")
-
         response?.apply {
-            contentType = "application/zip"
-            setHeader("Content-Disposition", "attachment; filename=splits.zip")
-
-            // ✅ header de debug para saber qué versión sirvió realmente
+            // headers buildId
+            setHeader("X-GloballyDynamic-BuildId", serverBuildId ?: "")
+            setHeader("X-GloballyDynamic-BuildId-Mismatch", buildIdMismatch.toString())
             setHeader("X-GloballyDynamic-Resolved-Version", resolvedVersion.toString())
 
+            contentType = "application/zip"
+            setHeader("Content-Disposition", "attachment; filename=splits.zip")
             setContentLength(fileSize)
 
             compressedSplits.toFile().inputStream().use { inputStream ->
@@ -162,12 +160,21 @@ internal class DownloadSplitsPathHandler(
             }
         }
 
-        val message = StringBuilder("Finished sending ")
-        if (featuresToInstallParam.isNotEmpty()) message.append(" features [$featuresString]")
-        if (languagesToInstallParam.isNotEmpty()) {
-            message.append((if (featuresToInstallParam.isNotEmpty()) " and " else "") + "languages [$languagesString]")
+        logger.i("Finished sending splits. resolvedVersion=$resolvedVersion buildIdMismatch=$buildIdMismatch", prefix = "\n")
+    }
+
+
+    private fun getBuildIdFromMeta(applicationId: String, variant: String, version: Int): String? {
+        return try {
+            val metaFileName = "${applicationId}_${variant}_$version.meta.json"
+            val metaPath = (bundleManager as? BundleManagerImpl)?.storageBackend?.retrieveFile(metaFileName)
+                ?: return null
+            val text = metaPath.toFile().readText()
+            val json = gson.fromJson(text, com.google.gson.JsonObject::class.java)
+            if (json.has("buildId") && !json.get("buildId").isJsonNull) json.get("buildId").asString else null
+        } catch (_: Exception) {
+            null
         }
-        logger.i(message = message.toString(), prefix = "\n")
     }
 
     /**
